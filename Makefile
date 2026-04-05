@@ -23,7 +23,7 @@ build: ## Build container image
 	@podman build -f $(DOCKERFILE) -t $(IMAGE):$(APP_VERSION) -t $(IMAGE):latest .
 
 run: ## Run container image 
-	@DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN} TZ=${TZ} envsubst < $(KUBE_FILE) | podman kube play --replace -
+	@DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN} TZ=${TZ} WIPE_COMMANDS_ON_EXIT=${WIPE_COMMANDS_ON_EXIT} envsubst < $(KUBE_FILE) | podman kube play --replace -
 
 stop: ## Stop running container
 	@podman kube down $(KUBE_FILE) || true
