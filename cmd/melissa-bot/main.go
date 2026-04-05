@@ -10,20 +10,30 @@ import (
 
 // Variables used for configuration
 var (
-	Token string
+	discord      *discordgo.Session
+	discordToken string
+	commandWipe  bool
 )
 
+// Get bot configurations
 func init() {
 	// Get the bot token from an environment variable
-	Token = os.Getenv("DISCORD_BOT_TOKEN")
-	if Token == "" {
-		log.Fatal("It is necessary to set the DISCORD_BOT_TOKEN environment variable")
+	discordToken = env.GetStr("DISCORD_BOT_TOKEN", "")
+	if discordToken == "" {
+		log.Fatal("No token provided\nIt is necessary to set the DISCORD_BOT_TOKEN environment variable")
 	}
+
+	// Check if the command wipe flag is set
+	commandWipe = env.GetBool("COMMAND_WIPE", false)
 }
 
-func main() {
+// Setup the Discord session and event handlers
+func init() {
+	var err error
+
 	// Create a new Discord session using the provided bot token
-	discord, err := discordgo.New("Bot " + Token)
+	log.Println("Starting Melissa Bot...")
+	discord, err = discordgo.New("Bot " + discordToken)
 	if err != nil {
 		log.Fatal(err)
 	}
