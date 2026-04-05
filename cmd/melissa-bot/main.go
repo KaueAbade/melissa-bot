@@ -15,7 +15,9 @@ import (
 var (
 	discord      *discordgo.Session
 	discordToken string
-	commandWipe  bool
+
+	commandWipe bool
+	debug       bool
 )
 
 // Get bot configurations
@@ -26,8 +28,9 @@ func init() {
 		log.Fatal("No token provided\nIt is necessary to set the DISCORD_BOT_TOKEN environment variable")
 	}
 
-	// Check if the command wipe flag is set
+	// Get configuration envs
 	commandWipe = env.GetBool("WIPE_COMMANDS_ON_EXIT", false)
+	debug = env.GetBool("DEBUG", false)
 }
 
 // Setup the Discord session and event handlers
@@ -74,6 +77,9 @@ func main() {
 		if err != nil {
 			log.Panicf("Cannot create '%v' command: %v\n", cmd.Name, err)
 		}
+		if debug {
+			log.Printf("Registered command '%v'\n", cmd.Name)
+		}
 		registeredCommands[i] = ccmd
 	}
 
@@ -119,5 +125,10 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 	// Ignore all messages created by the bot itself or any other bots
 	if message.Author.ID == session.State.User.ID || message.Author.Bot {
 		return
+	}
+
+	// Log the content of the message and the author for debugging purposes
+	if debug {
+		log.Printf("Received message: %s from %s#%s\n", message.Content, message.Author.Username, message.Author.Discriminator)
 	}
 }

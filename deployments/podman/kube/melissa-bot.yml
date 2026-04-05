@@ -3,9 +3,10 @@ kind: ConfigMap
 metadata:
   name: melissa-bot-config
 data:
+  DEBUG: ${DEBUG}
   DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
-  TZ: ${TZ}
   WIPE_COMMANDS_ON_EXIT: ${WIPE_COMMANDS_ON_EXIT}
+  TZ: ${TZ}
 ---
 apiVersion: v1
 kind: Pod
