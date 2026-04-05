@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: melissa-bot-config
+data:
+  DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+  TZ: ${TZ}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: melissa-bot
+  labels:
+    app: melissa-bot,pod
+
+spec:
+  containers:
+  - name: main
+    image: github.com/kaueabade/melissa-bot:latest
+    envFrom:
+    - configMapRef:
+        name: melissa-bot-config
