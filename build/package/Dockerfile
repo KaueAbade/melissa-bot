@@ -12,13 +12,13 @@ RUN go mod download
 RUN apk add --no-cache ca-certificates tzdata
 
 # Copy the entire source code to the working directory
-COPY cmd/melissa-bot/ . 
+COPY . . 
 
 # Build the application with CGO disabled and static linking
 RUN CGO_ENABLED=0 GOOS=linux go build \
 	-trimpath \
 	-ldflags='-s -w -extldflags "-static"' \
-	-o /out/melissa-bot .
+	-o /out/melissa-bot cmd/melissa-bot/main.go
     
 # Stage 2: Create a minimal image with the built application
 FROM scratch
