@@ -2,6 +2,8 @@ package commands
 
 import (
 	"fmt"
+	"log"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -42,36 +44,57 @@ var (
 		},
 	}
 	Handlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
-		CmdHelp: HelpHandler,
-		CmdPing: PingHandler,
+		CmdHelp: cmdHandler,
+		CmdPing: cmdHandler,
+	}
+	Responses = map[string]func() string{
+		CmdHelp: helpResponse,
+		CmdPing: pingResponse,
 	}
 )
 
-// This should provide information about the bot and its commands.
-func HelpHandler(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
-	// Build the response message with the list of commands and their descriptions
+// This function parses a command name from a message, checking if it starts with any of the defined commands
+func GetCmdNameFromMessage(message *discordgo.MessageCreate) (cmdName string, found bool) {
+	// Returns early if the message content is empty
+	if message.Content == "" {
+		return "", false
+	}
+
+	// Check if the message contains an valid command as a prefix
+	// Turn first character to lowercase to make the command recognition case insensitive
+	message.Content = strings.ToLower(message.Content[:1]) + message.Content[1:]
+	for _, cmd := range Definitions {
+		if strings.HasPrefix(message.Content, cmd.Name) {
+			return cmd.Name, true
+		}
+	}
+	return "", false
+}
+
+// This function is called when a command interaction is received. It looks up the appropriate response and sends it back to the user.
+func cmdHandler(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
+	if err := session.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: Responses[interaction.ApplicationCommandData().Name](),
+		},
+	}); err != nil {
+		log.Printf("Failed to respond to /%s: %v\n", CmdHelp, err)
+	}
+}
+
+// This functions returns a help message listing all available commands and their descriptions.
+func helpResponse() string {
 	response := "Hello! I'm Melissa Bot, your friendly Discord assistant. Here are some commands you can use:"
 	for _, cmd := range Definitions {
 		cmdBrief := fmt.Sprintf("/%s: %s", cmd.Name, cmd.Description)
 		response = fmt.Sprintf("%s\n%s", response, cmdBrief)
 	}
 
-	// Send the response back to the user
-	session.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: response,
-		},
-	})
+	return response
 }
 
-// This should respond with "Pong!" to test if the bot is responsive.
-func PingHandler(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
-	// Send the response back to the user
-	session.InteractionRespond(interaction.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: "Pong!",
-		},
-	})
+// Pong!
+func pingResponse() string {
+	return "Pong!"
 }
