@@ -118,9 +118,8 @@ func ready(session *discordgo.Session, event *discordgo.Ready) {
 	session.UpdateGameStatus(0, "Type '/help' for more information!")
 }
 
-// This function will be called (due to AddHandler above)
-// every time a new message is created on any channel that the
-// bot has access to.
+// This function will be called (due to AddHandler above) every time a new message
+// is created on any channel that the bot has access to.
 func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
 	// Ignore all messages created by the bot itself or any other bots
 	if message.Author.ID == session.State.User.ID || message.Author.Bot {
