@@ -59,7 +59,7 @@ func init() {
 
 	// Wait here until CTRL-C or other sigterm is received
 	quitSignal := make(chan os.Signal, 1)
-	signal.Notify(quitSignal, syscall.SIGTERM)
+	signal.Notify(quitSignal, os.Interrupt, syscall.SIGTERM)
 	<-quitSignal
 
 	// Cleanly close down the Discord session
