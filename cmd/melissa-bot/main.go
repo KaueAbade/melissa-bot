@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/KaueAbade/melissa-bot/internal/commands"
@@ -126,8 +128,78 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 		return
 	}
 
-	// Log the content of the message and the author for debugging purposes
+	// Log the content of the message if debug mode is enabled
 	if debug {
-		log.Printf("Received message: %s from %s#%s\n", message.Content, message.Author.Username, message.Author.Discriminator)
+		log.Printf("Received message: [%s#%s] '%s'\n",
+			message.Author.Username, message.Author.Discriminator, message.Content)
 	}
+
+	// Route depending if the bot was mentioned in the message or not
+	if message.Mentions != nil {
+		for _, user := range message.Mentions {
+			if user.ID == session.State.User.ID {
+				mentionMessageCreate(session, message)
+				return
+			}
+		}
+	}
+
+	// Route depending on whether the message was sent in a guild or in direct message
+	if message.GuildID == "" {
+		directMessageCreate(session, message)
+		return
+	} else {
+		guildMessageCreate(session, message)
+		return
+	}
+}
+
+func mentionMessageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
+	// Remove the bot's mention from the start of the message content, if that is the case
+	mention := fmt.Sprintf("<@%s>", session.State.User.ID)
+	altMention := fmt.Sprintf("<@!%s>", session.State.User.ID)
+	message.Content = strings.TrimPrefix(strings.TrimPrefix(message.Content, mention+" "), altMention+" ")
+
+	// Answer the message properly if it starts with a known command
+	if cmdName, found := commands.GetCmdNameFromMessage(message); found {
+		if debug {
+			log.Printf("Received command '%s' in message: '%s'\n", cmdName, message.Content)
+		}
+
+		if responseBuilder, ok := commands.Responses[cmdName]; ok {
+			if _, err := session.ChannelMessageSend(message.ChannelID, responseBuilder()); err != nil {
+				log.Printf("Failed to send response for '%s': %v\n", cmdName, err)
+			}
+			return
+		}
+	}
+
+	// If we reached this point, simply reply to the message to let the user know the bot is responsive
+	session.ChannelMessageSend(message.ChannelID, "Hello, I'm here!")
+}
+
+// This function will be called when the bot receives a message in a guild channel.
+func guildMessageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
+	// For now, simply ignore messages sent in guild channels
+}
+
+// This function will be called when the bot receives a message in a direct message channel.
+func directMessageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
+	// Answer the message properly if it starts with a known command
+	if cmdName, found := commands.GetCmdNameFromMessage(message); found {
+		if debug {
+			log.Printf("Received command '%s' in direct message: [%s#%s] '%s'\n",
+				cmdName, message.Author.Username, message.Author.Discriminator, message.Content)
+		}
+
+		if responseBuilder, ok := commands.Responses[cmdName]; ok {
+			if _, err := session.ChannelMessageSend(message.ChannelID, responseBuilder()); err != nil {
+				log.Printf("Failed to send response for '%s': %v\n", cmdName, err)
+			}
+			return
+		}
+	}
+
+	// If we reached this point, simply reply to the message to let the user know the bot is responsive
+	session.ChannelMessageSend(message.ChannelID, "Hello!")
 }
