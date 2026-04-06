@@ -34,6 +34,11 @@ func init() {
 	// Get configuration envs
 	commandWipe = env.GetBool("WIPE_COMMANDS_ON_EXIT", false)
 	debug = env.GetBool("DEBUG", false)
+
+	// Validate command consistency at startup
+	if err := commands.ValidateCommands(); err != nil {
+		log.Fatalf("Command validation failed: %v", err)
+	}
 }
 
 // Setup the Discord session and event handlers
@@ -155,6 +160,30 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 	}
 }
 
+// As messages don't provide locale information, this function tries to resolve the most appropriate one
+func resolveMessageLocale(session *discordgo.Session, message *discordgo.MessageCreate) discordgo.Locale {
+	// If the message was sent in a direct message channel, we try to get the locale of the user that sent the message
+	if message.GuildID == "" {
+		if user, err := session.User(message.Author.ID); err == nil && user != nil && user.Locale != "" {
+			return discordgo.Locale(user.Locale)
+		}
+	}
+
+	// Instead of the guild locale, we first try to get the locale of the guild owner
+	// See: https://github.com/discord/discord-api-docs/discussions/4332
+	if guild, err := session.Guild(message.GuildID); err == nil && guild != nil && guild.PreferredLocale != "" {
+		if user, err := session.User(guild.OwnerID); err == nil && user != nil && user.Locale != "" {
+			return discordgo.Locale(user.Locale)
+		}
+
+		// If the guild owner doesn't have a locale set, we fallback to the guild preferred locale
+		return discordgo.Locale(guild.PreferredLocale)
+	}
+
+	// If we couldn't get any locale information from the message, we fallback to EnglishUS
+	return discordgo.EnglishUS
+}
+
 func mentionMessageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
 	// Remove the bot's mention from the start of the message content, if that is the case
 	mention := fmt.Sprintf("<@%s>", session.State.User.ID)
@@ -167,8 +196,9 @@ func mentionMessageCreate(session *discordgo.Session, message *discordgo.Message
 			log.Printf("Received command '%s' in message: '%s'\n", cmdName, message.Content)
 		}
 
+		locale := resolveMessageLocale(session, message)
 		if responseBuilder, ok := commands.Responses[cmdName]; ok {
-			if _, err := session.ChannelMessageSend(message.ChannelID, responseBuilder()); err != nil {
+			if _, err := session.ChannelMessageSend(message.ChannelID, responseBuilder(locale)); err != nil {
 				log.Printf("Failed to send response for '%s': %v\n", cmdName, err)
 			}
 			return
@@ -176,7 +206,7 @@ func mentionMessageCreate(session *discordgo.Session, message *discordgo.Message
 	}
 
 	// If we reached this point, simply reply to the message to let the user know the bot is responsive
-	session.ChannelMessageSend(message.ChannelID, "Hello, I'm here!")
+	session.ChannelMessageSend(message.ChannelID, commands.Responses[commands.CmdHello](resolveMessageLocale(session, message)))
 }
 
 // This function will be called when the bot receives a message in a guild channel.
@@ -188,13 +218,15 @@ func guildMessageCreate(session *discordgo.Session, message *discordgo.MessageCr
 func directMessageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
 	// Answer the message properly if it starts with a known command
 	if cmdName, found := commands.GetCmdNameFromMessage(message); found {
+		locale := resolveMessageLocale(session, message)
+
 		if debug {
-			log.Printf("Received command '%s' in direct message: [%s#%s] '%s'\n",
-				cmdName, message.Author.Username, message.Author.Discriminator, message.Content)
+			log.Printf("Received command '%s' in direct message: [%s#%s] '%s' (locale: %s)\n",
+				cmdName, message.Author.Username, message.Author.Discriminator, message.Content, locale)
 		}
 
 		if responseBuilder, ok := commands.Responses[cmdName]; ok {
-			if _, err := session.ChannelMessageSend(message.ChannelID, responseBuilder()); err != nil {
+			if _, err := session.ChannelMessageSend(message.ChannelID, responseBuilder(locale)); err != nil {
 				log.Printf("Failed to send response for '%s': %v\n", cmdName, err)
 			}
 			return
@@ -202,5 +234,5 @@ func directMessageCreate(session *discordgo.Session, message *discordgo.MessageC
 	}
 
 	// If we reached this point, simply reply to the message to let the user know the bot is responsive
-	session.ChannelMessageSend(message.ChannelID, "Hello!")
+	session.ChannelMessageSend(message.ChannelID, commands.Responses[commands.CmdHello](resolveMessageLocale(session, message)))
 }
