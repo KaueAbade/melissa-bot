@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -13,6 +14,7 @@ import (
 const (
 	CmdHelp = "help"
 	CmdPing = "ping"
+	CmdRoll = "roll"
 )
 
 // Command descriptions and handlers
@@ -42,14 +44,26 @@ var (
 				discordgo.PortugueseBR: "Pong!",
 			},
 		},
+		{
+			Name:             CmdRoll,
+			Description:      "Rolls a dice and returns the result",
+			DMPermission:     &defaultDMPermission,
+			Contexts:         &defaultContexts,
+			IntegrationTypes: &defaultIntegrations,
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.PortugueseBR: "Joga um dado e retorna o resultado",
+			},
+		},
 	}
 	Handlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
 		CmdHelp: cmdHandler,
 		CmdPing: cmdHandler,
+		CmdRoll: cmdHandler,
 	}
 	Responses = map[string]func() string{
 		CmdHelp: helpResponse,
 		CmdPing: pingResponse,
+		CmdRoll: rollResponse,
 	}
 )
 
@@ -97,4 +111,9 @@ func helpResponse() string {
 // Pong!
 func pingResponse() string {
 	return "Pong!"
+}
+
+// Rolls a dice and returns the result
+func rollResponse() string {
+	return fmt.Sprintf("You rolled a %d!", 1+rand.Intn(6))
 }
