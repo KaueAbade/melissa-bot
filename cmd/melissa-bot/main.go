@@ -15,8 +15,9 @@ import (
 
 // Variables used for configuration
 var (
-	discord      *discordgo.Session
-	discordToken string
+	discord            *discordgo.Session
+	discordToken       string
+	registeredCommands []*discordgo.ApplicationCommand
 
 	commandWipe bool
 	debug       bool
@@ -72,19 +73,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Register the commands and their handlers
-	registeredCommands := make([]*discordgo.ApplicationCommand, len(commands.Definitions))
-	for i, cmd := range commands.Definitions {
-		ccmd, err := discord.ApplicationCommandCreate(discord.State.User.ID, "", cmd)
-		if err != nil {
-			log.Panicf("Cannot create '%v' command: %v\n", cmd.Name, err)
-		}
-		if debug {
-			log.Printf("Registered command '%v'\n", cmd.Name)
-		}
-		registeredCommands[i] = ccmd
-	}
-
 	// Wait here until an sigterm is received
 	quitSignal := make(chan os.Signal, 1)
 	signal.Notify(quitSignal, os.Interrupt, syscall.SIGTERM)
@@ -118,6 +106,19 @@ func ready(session *discordgo.Session, event *discordgo.Ready) {
 	// Log that the bot is ready and set its status to the help command
 	log.Printf("Melissa Bot is ready as: '%s#%s'\n", session.State.User.Username, session.State.User.Discriminator)
 	session.UpdateGameStatus(0, "Type '/help' for more information!")
+
+	// Register the commands and their handlers
+	registeredCommands = make([]*discordgo.ApplicationCommand, len(commands.Definitions))
+	for i, cmd := range commands.Definitions {
+		ccmd, err := discord.ApplicationCommandCreate(discord.State.User.ID, "", cmd)
+		if err != nil {
+			log.Panicf("Cannot create '%v' command: %v\n", cmd.Name, err)
+		}
+		if debug {
+			log.Printf("Registered command '%v'\n", cmd.Name)
+		}
+		registeredCommands[i] = ccmd
+	}
 }
 
 // This function will be called (due to AddHandler above) every time a new message
