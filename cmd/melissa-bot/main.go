@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -64,9 +65,7 @@ func init() {
 	discord.AddHandler(ready)
 	discord.AddHandler(messageCreate)
 	discord.AddHandler(func(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
-		if handler, ok := commands.Handlers[interaction.ApplicationCommandData().Name]; ok {
-			handler(session, interaction)
-		}
+		commands.HandleInteraction(session, interaction)
 	})
 }
 
@@ -113,8 +112,9 @@ func ready(session *discordgo.Session, event *discordgo.Ready) {
 	session.UpdateGameStatus(0, "Type '/help' for more information!")
 
 	// Register the commands and their handlers
-	registeredCommands = make([]*discordgo.ApplicationCommand, len(commands.Definitions))
-	for i, cmd := range commands.Definitions {
+	applicationCommands := commands.GetApplicationCommands()
+	registeredCommands = make([]*discordgo.ApplicationCommand, len(applicationCommands))
+	for i, cmd := range applicationCommands {
 		ccmd, err := discord.ApplicationCommandCreate(discord.State.User.ID, "", cmd)
 		if err != nil {
 			log.Panicf("Cannot create '%v' command: %v\n", cmd.Name, err)
@@ -132,12 +132,6 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 	// Ignore all messages created by the bot itself or any other bots
 	if message.Author.ID == session.State.User.ID || message.Author.Bot {
 		return
-	}
-
-	// Log the content of the message if debug mode is enabled
-	if debug {
-		log.Printf("Received message: [%s#%s] '%s'\n",
-			message.Author.Username, message.Author.Discriminator, message.Content)
 	}
 
 	// Route depending if the bot was mentioned in the message or not
@@ -158,6 +152,43 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 		guildMessageCreate(session, message)
 		return
 	}
+}
+
+// This function will be called when the bot receives a message that mentions it.
+func mentionMessageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
+	// Remove the bot's mention from the start of the message content, if that is the case
+	mention := fmt.Sprintf("<@%s>", session.State.User.ID)
+	altMention := fmt.Sprintf("<@!%s>", session.State.User.ID)
+	message.Content = strings.TrimPrefix(strings.TrimPrefix(message.Content, mention+" "), altMention+" ")
+
+	// Log the content of the message if debug mode is enabled
+	if debug {
+		log.Printf("Received mention message: [%s#%s] '%s'\n",
+			message.Author.Username, message.Author.Discriminator, message.Content)
+	}
+
+	respondToMessage(session, message)
+}
+
+// This function will be called when the bot receives a message in a guild channel.
+func guildMessageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
+	// For now, simply ignore messages sent in guild channels
+
+	// Log the content of the message if debug mode is enabled
+	if debug {
+		log.Printf("Received guild message: [%s#%s] '%s'\n",
+			message.Author.Username, message.Author.Discriminator, message.Content)
+	}
+}
+
+// This function will be called when the bot receives a message in a direct message channel.
+func directMessageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
+	if debug {
+		log.Printf("Received direct message: [%s#%s] '%s'\n",
+			message.Author.Username, message.Author.Discriminator, message.Content)
+	}
+
+	respondToMessage(session, message)
 }
 
 // As messages don't provide locale information, this function tries to resolve the most appropriate one
@@ -184,55 +215,28 @@ func resolveMessageLocale(session *discordgo.Session, message *discordgo.Message
 	return discordgo.EnglishUS
 }
 
-func mentionMessageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
-	// Remove the bot's mention from the start of the message content, if that is the case
-	mention := fmt.Sprintf("<@%s>", session.State.User.ID)
-	altMention := fmt.Sprintf("<@!%s>", session.State.User.ID)
-	message.Content = strings.TrimPrefix(strings.TrimPrefix(message.Content, mention+" "), altMention+" ")
+// This function tries to resolve the command from the message content
+// and sends the response to the channel where the message was sent
+func respondToMessage(session *discordgo.Session, message *discordgo.MessageCreate) {
+	locale := resolveMessageLocale(session, message)
 
-	// Answer the message properly if it starts with a known command
-	if cmdName, found := commands.GetCmdNameFromMessage(message); found {
-		if debug {
-			log.Printf("Received command '%s' in message: '%s'\n", cmdName, message.Content)
+	// Try to resolve the command from the message content, if that fails we fallback to the default command
+	response, err := commands.ExecuteFromContent(message.Content, locale)
+	if err != nil {
+		if errors.Is(err, commands.ErrCommandNotFound) {
+			log.Printf("Failed to resolve command from message content: '%s'\n", message.Content)
+		} else {
+			log.Printf("Failed to resolve command: %v\n", err)
 		}
 
-		locale := resolveMessageLocale(session, message)
-		if responseBuilder, ok := commands.Responses[cmdName]; ok {
-			if _, err := session.ChannelMessageSend(message.ChannelID, responseBuilder(locale)); err != nil {
-				log.Printf("Failed to send response for '%s': %v\n", cmdName, err)
-			}
+		response, err = commands.ExecuteFromKey(commands.CmdHello, locale)
+		if err != nil {
+			log.Printf("Failed to resolve fallback command '%s': %v\n", commands.CmdHello, err)
 			return
 		}
 	}
 
-	// If we reached this point, simply reply to the message to let the user know the bot is responsive
-	session.ChannelMessageSend(message.ChannelID, commands.Responses[commands.CmdHello](resolveMessageLocale(session, message)))
-}
-
-// This function will be called when the bot receives a message in a guild channel.
-func guildMessageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
-	// For now, simply ignore messages sent in guild channels
-}
-
-// This function will be called when the bot receives a message in a direct message channel.
-func directMessageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
-	// Answer the message properly if it starts with a known command
-	if cmdName, found := commands.GetCmdNameFromMessage(message); found {
-		locale := resolveMessageLocale(session, message)
-
-		if debug {
-			log.Printf("Received command '%s' in direct message: [%s#%s] '%s' (locale: %s)\n",
-				cmdName, message.Author.Username, message.Author.Discriminator, message.Content, locale)
-		}
-
-		if responseBuilder, ok := commands.Responses[cmdName]; ok {
-			if _, err := session.ChannelMessageSend(message.ChannelID, responseBuilder(locale)); err != nil {
-				log.Printf("Failed to send response for '%s': %v\n", cmdName, err)
-			}
-			return
-		}
+	if _, sendErr := session.ChannelMessageSend(message.ChannelID, response); sendErr != nil {
+		log.Printf("Failed to send response: %v\n", sendErr)
 	}
-
-	// If we reached this point, simply reply to the message to let the user know the bot is responsive
-	session.ChannelMessageSend(message.ChannelID, commands.Responses[commands.CmdHello](resolveMessageLocale(session, message)))
 }
