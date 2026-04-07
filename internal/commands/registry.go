@@ -16,14 +16,13 @@ func (key CommandKey) String() string {
 	return string(key)
 }
 
-// Default locale to fall back to when a specific localization is not available
-const defaultLocale = discordgo.EnglishUS
-
 // Default command properties, can be overridden by individual commands if needed
 var (
 	defaultDMPermission = true
 	defaultContexts     = []discordgo.InteractionContextType{discordgo.InteractionContextGuild, discordgo.InteractionContextBotDM}
 	defaultIntegrations = []discordgo.ApplicationIntegrationType{discordgo.ApplicationIntegrationGuildInstall}
+	defaultLocale       = discordgo.EnglishUS
+	desiredLocale       = discordgo.EnglishUS
 	commands            map[CommandKey]*command
 	commandsDef         []*command
 )
@@ -94,32 +93,11 @@ func init() {
 	}
 }
 
-// getCmdKeyFromContent parses and validates the first token as a typed command key.
-func getCmdFromContent(content string) (*command, bool) {
-	fields := strings.Fields(content)
-	if len(fields) == 0 {
-		return nil, false
-	}
-
-	return getCmdFromName(fields[0])
-}
-
-// getCmdKeyFromName parses and validates the input string as a typed command key.
-func getCmdFromName(name string) (*command, bool) {
-	key := CommandKey(strings.ToLower(strings.TrimSpace(name)))
-	if key == "" {
-		return nil, false
-	}
-
-	return getCmdFromKey(key)
-}
-
-// getCmdFromKey looks up a Command struct by its CommandKey.
-func getCmdFromKey(key CommandKey) (*command, bool) {
-	if cmd, exists := commands[key]; exists {
-		return cmd, true
-	}
-	return nil, false
+// SetLocale is a helper function to set the default locale
+func SetDesiredLocale(locale discordgo.Locale) {
+	// Update the default locale
+	log.Printf("Setting desired locale to: %s\n", locale)
+	desiredLocale = locale
 }
 
 // ExecuteFromKey resolves a command by key and returns its localized response.
@@ -219,4 +197,32 @@ func ValidateCommands() error {
 	}
 
 	return nil
+}
+
+// getCmdKeyFromContent parses and validates the first token as a typed command key.
+func getCmdFromContent(content string) (*command, bool) {
+	fields := strings.Fields(content)
+	if len(fields) == 0 {
+		return nil, false
+	}
+
+	return getCmdFromName(fields[0])
+}
+
+// getCmdKeyFromName parses and validates the input string as a typed command key.
+func getCmdFromName(name string) (*command, bool) {
+	key := CommandKey(strings.ToLower(strings.TrimSpace(name)))
+	if key == "" {
+		return nil, false
+	}
+
+	return getCmdFromKey(key)
+}
+
+// getCmdFromKey looks up a Command struct by its CommandKey.
+func getCmdFromKey(key CommandKey) (*command, bool) {
+	if cmd, exists := commands[key]; exists {
+		return cmd, true
+	}
+	return nil, false
 }

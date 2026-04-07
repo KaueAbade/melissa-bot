@@ -31,6 +31,49 @@ func withTemporaryRegistry(t *testing.T, cmds []*command) {
 	})
 }
 
+func withTemporaryDesiredLocale(t *testing.T, locale discordgo.Locale) {
+	t.Helper()
+	originalLocale := desiredLocale
+	desiredLocale = locale
+
+	t.Cleanup(func() {
+		desiredLocale = originalLocale
+	})
+}
+
+func TestSetDesiredLocale(t *testing.T) {
+	withTemporaryDesiredLocale(t, discordgo.EnglishUS)
+
+	SetDesiredLocale(discordgo.PortugueseBR)
+
+	if desiredLocale != discordgo.PortugueseBR {
+		t.Fatalf("expected desired locale to be %s, got %s", discordgo.PortugueseBR, desiredLocale)
+	}
+}
+
+func TestSetDesiredLocaleAffectsResponseFallback(t *testing.T) {
+	withTemporaryDesiredLocale(t, discordgo.EnglishUS)
+
+	cmd := &command{
+		Key:             Hello,
+		ResponseBuilder: simpleResponse,
+		ResponseTemplate: map[discordgo.Locale]string{
+			discordgo.EnglishUS:    "Hello",
+			discordgo.PortugueseBR: "Ola",
+		},
+	}
+
+	SetDesiredLocale(discordgo.PortugueseBR)
+
+	got, err := simpleResponse(cmd, discordgo.Japanese)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "Ola" {
+		t.Fatalf("expected Portuguese fallback response, got %q", got)
+	}
+}
+
 func TestGetCmdFromKey(t *testing.T) {
 	cmd, exists := getCmdFromKey(Help)
 	if !exists {

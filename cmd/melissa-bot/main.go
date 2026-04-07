@@ -26,6 +26,8 @@ var (
 
 // Get bot configurations
 func init() {
+	log.Println("Setting up Melissa Bot...")
+
 	// Get the bot token from an environment variable
 	discordToken = env.GetStr("DISCORD_BOT_TOKEN", "")
 	if discordToken == "" {
@@ -35,6 +37,8 @@ func init() {
 	// Get configuration envs
 	commandWipe = env.GetBool("WIPE_COMMANDS_ON_EXIT", false)
 	debug = env.GetBool("DEBUG", false)
+	defaultLocale := env.GetStr("LOCALE", string(discordgo.EnglishUS))
+	commands.SetDesiredLocale(discordgo.Locale(defaultLocale))
 
 	// Validate command consistency at startup
 	if err := commands.ValidateCommands(); err != nil {

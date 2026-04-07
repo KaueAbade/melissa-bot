@@ -36,6 +36,59 @@ func TestSimpleResponseReturnsErrorForNilTemplate(t *testing.T) {
 	}
 }
 
+func TestSimpleResponseReturnsErrorForNilCommand(t *testing.T) {
+	if _, err := simpleResponse(nil, discordgo.EnglishUS); err == nil {
+		t.Fatalf("expected error when command is nil")
+	}
+}
+
+func TestSimpleResponseFallsBackToDesiredLocale(t *testing.T) {
+	originalDesired := desiredLocale
+	desiredLocale = discordgo.PortugueseBR
+	t.Cleanup(func() {
+		desiredLocale = originalDesired
+	})
+
+	command := &command{
+		Key: Hello,
+		ResponseTemplate: map[discordgo.Locale]string{
+			discordgo.EnglishUS:    "Hello!",
+			discordgo.PortugueseBR: "Ola!",
+		},
+	}
+
+	got, err := simpleResponse(command, discordgo.Japanese)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "Ola!" {
+		t.Fatalf("expected fallback to desired locale response, got %q", got)
+	}
+}
+
+func TestSimpleResponseFallsBackToEnglishWhenDesiredMissing(t *testing.T) {
+	originalDesired := desiredLocale
+	desiredLocale = discordgo.PortugueseBR
+	t.Cleanup(func() {
+		desiredLocale = originalDesired
+	})
+
+	command := &command{
+		Key: Hello,
+		ResponseTemplate: map[discordgo.Locale]string{
+			discordgo.EnglishUS: "Hello!",
+		},
+	}
+
+	got, err := simpleResponse(command, discordgo.Japanese)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "Hello!" {
+		t.Fatalf("expected fallback to English response, got %q", got)
+	}
+}
+
 func TestHelpResponseIncludesCommands(t *testing.T) {
 	command := &command{
 		Key: Help,

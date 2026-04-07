@@ -18,10 +18,16 @@ type command struct {
 // Command.Description enables getting the description of a command based on the locale,
 // falling back to the default locale if the specific one is not available
 func (command *command) Description(locale discordgo.Locale) string {
+	// Check if the command has a description for the requested locale, if not we fallback to the desired locale
 	if description, exists := command.Descriptions[locale]; exists {
 		return description
 	}
-	return command.Descriptions[defaultLocale]
+
+	description, exists := command.Descriptions[desiredLocale]
+	if !exists {
+		description = command.Descriptions[defaultLocale]
+	}
+	return description
 }
 
 // Command.Response builds the localized command response.
@@ -38,7 +44,7 @@ func (command *command) ApplicationCommand() *discordgo.ApplicationCommand {
 	descriptions := command.Descriptions
 	return &discordgo.ApplicationCommand{
 		Name:                     command.Key.String(),
-		Description:              command.Description(defaultLocale),
+		Description:              command.Description(desiredLocale),
 		DescriptionLocalizations: &descriptions,
 		DMPermission:             &defaultDMPermission,
 		Contexts:                 &defaultContexts,

@@ -18,6 +18,9 @@ func simpleResponse(cmd *command, locale discordgo.Locale) (string, error) {
 	if response, exists := cmd.ResponseTemplate[locale]; exists {
 		return response, nil
 	}
+	if response, exists := cmd.ResponseTemplate[desiredLocale]; exists {
+		return response, nil
+	}
 	if response, exists := cmd.ResponseTemplate[discordgo.EnglishUS]; exists {
 		return response, nil
 	}

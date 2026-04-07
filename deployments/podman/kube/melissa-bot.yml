@@ -4,6 +4,7 @@ metadata:
   name: melissa-bot-config
 data:
   DEBUG: ${DEBUG}
+  LOCALE: ${LOCALE}
   DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
   WIPE_COMMANDS_ON_EXIT: ${WIPE_COMMANDS_ON_EXIT}
   TZ: ${TZ}

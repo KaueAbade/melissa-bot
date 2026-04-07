@@ -54,3 +54,22 @@ func TestApplicationCommandConversion(t *testing.T) {
 		t.Fatalf("expected localized descriptions")
 	}
 }
+
+func TestCommandDescriptionFallsBackToDefaultLocaleWhenDesiredIsMissing(t *testing.T) {
+	originalDesired := desiredLocale
+	desiredLocale = discordgo.PortugueseBR
+	t.Cleanup(func() {
+		desiredLocale = originalDesired
+	})
+
+	cmd := &command{
+		Key: Help,
+		Descriptions: map[discordgo.Locale]string{
+			discordgo.EnglishUS: "english",
+		},
+	}
+
+	if got := cmd.Description(discordgo.Japanese); got != "english" {
+		t.Fatalf("expected fallback to default locale description, got %q", got)
+	}
+}
