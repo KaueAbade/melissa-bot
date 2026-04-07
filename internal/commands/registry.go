@@ -30,17 +30,17 @@ var (
 
 // Exported command keys for external callers.
 const (
-	CmdHelp  CommandKey = "help"
-	CmdHello CommandKey = "hello"
-	CmdPing  CommandKey = "ping"
-	CmdRoll  CommandKey = "roll"
+	Help  CommandKey = "help"
+	Hello CommandKey = "hello"
+	Ping  CommandKey = "ping"
+	Roll  CommandKey = "roll"
 )
 
 func init() {
 	// Command registry initialization
 	commandsDef = []*command{
 		{
-			Key: CmdHelp,
+			Key: Help,
 			Descriptions: map[discordgo.Locale]string{
 				discordgo.EnglishUS:    "Provides information about the bot and its commands",
 				discordgo.PortugueseBR: "Fornece informações sobre o bot e seus comandos",
@@ -52,7 +52,7 @@ func init() {
 			},
 		},
 		{
-			Key: CmdHello,
+			Key: Hello,
 			Descriptions: map[discordgo.Locale]string{
 				discordgo.EnglishUS:    "Says hello to the user",
 				discordgo.PortugueseBR: "Diz olá para o usuário",
@@ -64,7 +64,7 @@ func init() {
 			},
 		},
 		{
-			Key: CmdPing,
+			Key: Ping,
 			Descriptions: map[discordgo.Locale]string{
 				discordgo.EnglishUS: "Pong!",
 			},
@@ -74,7 +74,7 @@ func init() {
 			},
 		},
 		{
-			Key: CmdRoll,
+			Key: Roll,
 			Descriptions: map[discordgo.Locale]string{
 				discordgo.EnglishUS:    "Rolls a dice and returns the result",
 				discordgo.PortugueseBR: "Joga um dado e retorna o resultado",

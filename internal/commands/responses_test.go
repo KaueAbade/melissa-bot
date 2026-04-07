@@ -10,7 +10,7 @@ import (
 
 func TestSimpleResponseUsesLocaleAndFallback(t *testing.T) {
 	command := &command{
-		Key: CmdHello,
+		Key: Hello,
 		ResponseTemplate: map[discordgo.Locale]string{
 			discordgo.EnglishUS:    "Hello!",
 			discordgo.PortugueseBR: "Olá!",
@@ -29,7 +29,7 @@ func TestSimpleResponseUsesLocaleAndFallback(t *testing.T) {
 }
 
 func TestSimpleResponseReturnsErrorForNilTemplate(t *testing.T) {
-	command := &command{Key: CmdHello}
+	command := &command{Key: Hello}
 
 	if _, err := simpleResponse(command, discordgo.EnglishUS); err == nil {
 		t.Fatalf("expected error when response template is nil")
@@ -38,7 +38,7 @@ func TestSimpleResponseReturnsErrorForNilTemplate(t *testing.T) {
 
 func TestHelpResponseIncludesCommands(t *testing.T) {
 	command := &command{
-		Key: CmdHelp,
+		Key: Help,
 		ResponseTemplate: map[discordgo.Locale]string{
 			discordgo.EnglishUS: "Commands:",
 		},
@@ -63,7 +63,7 @@ func TestHelpResponseIncludesCommands(t *testing.T) {
 func TestHelpResponseUsesCommandDefinitionsDirectly(t *testing.T) {
 	withTemporaryRegistry(t, []*command{
 		{
-			Key: CmdHelp,
+			Key: Help,
 			Descriptions: map[discordgo.Locale]string{
 				discordgo.EnglishUS: "Help",
 			},
@@ -84,7 +84,7 @@ func TestHelpResponseUsesCommandDefinitionsDirectly(t *testing.T) {
 		},
 	})
 
-	helpCmd, exists := getCmdFromKey(CmdHelp)
+	helpCmd, exists := getCmdFromKey(Help)
 	if !exists {
 		t.Fatalf("expected help command lookup")
 	}
@@ -103,7 +103,7 @@ func TestHelpResponseUsesCommandDefinitionsDirectly(t *testing.T) {
 
 func TestRollResponseRange(t *testing.T) {
 	command := &command{
-		Key: CmdRoll,
+		Key: Roll,
 		ResponseTemplate: map[discordgo.Locale]string{
 			discordgo.EnglishUS: "You rolled a %d!",
 		},
@@ -126,7 +126,7 @@ func TestRollResponseRange(t *testing.T) {
 
 func TestHelpResponseReturnsErrorForInvalidTemplate(t *testing.T) {
 	command := &command{
-		Key:              CmdHelp,
+		Key:              Help,
 		ResponseTemplate: map[discordgo.Locale]string{},
 	}
 

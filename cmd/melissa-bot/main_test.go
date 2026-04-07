@@ -283,7 +283,7 @@ func TestMentionMessageCreateExecutesCommand(t *testing.T) {
 
 	session := newTestSession(t, server.Client())
 
-	expected, err := commands.ExecuteFromKey(commands.CmdHelp, discordgo.EnglishUS)
+	expected, err := commands.ExecuteFromKey(commands.Help, discordgo.EnglishUS)
 	if err != nil {
 		t.Fatalf("execute help: %v", err)
 	}
@@ -313,7 +313,7 @@ func TestMentionMessageCreateSupportsAltMentionAndFallback(t *testing.T) {
 
 	session := newTestSession(t, server.Client())
 
-	expected, err := commands.ExecuteFromKey(commands.CmdHello, discordgo.PortugueseBR)
+	expected, err := commands.ExecuteFromKey(commands.Hello, discordgo.PortugueseBR)
 	if err != nil {
 		t.Fatalf("execute fallback hello: %v", err)
 	}
@@ -343,7 +343,7 @@ func TestDirectMessageCreateExecutesCommand(t *testing.T) {
 
 	session := newTestSession(t, server.Client())
 
-	expected, err := commands.ExecuteFromKey(commands.CmdPing, discordgo.PortugueseBR)
+	expected, err := commands.ExecuteFromKey(commands.Ping, discordgo.PortugueseBR)
 	if err != nil {
 		t.Fatalf("execute ping: %v", err)
 	}
@@ -373,7 +373,7 @@ func TestDirectMessageCreateFallback(t *testing.T) {
 
 	session := newTestSession(t, server.Client())
 
-	expected, err := commands.ExecuteFromKey(commands.CmdHello, discordgo.PortugueseBR)
+	expected, err := commands.ExecuteFromKey(commands.Hello, discordgo.PortugueseBR)
 	if err != nil {
 		t.Fatalf("execute fallback hello: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestEntrypointsParityForDeterministicCommands(t *testing.T) {
 
 	session := newTestSession(t, server.Client())
 
-	deterministicCommands := []commands.CommandKey{commands.CmdHelp, commands.CmdHello, commands.CmdPing}
+	deterministicCommands := []commands.CommandKey{commands.Help, commands.Hello, commands.Ping}
 	for _, key := range deterministicCommands {
 		*sent = (*sent)[:0]
 
@@ -500,7 +500,7 @@ func TestMessageCreateRoutesMentionBeforeGuild(t *testing.T) {
 
 	session := newTestSession(t, server.Client())
 
-	expected, err := commands.ExecuteFromKey(commands.CmdPing, discordgo.EnglishUS)
+	expected, err := commands.ExecuteFromKey(commands.Ping, discordgo.EnglishUS)
 	if err != nil {
 		t.Fatalf("execute ping: %v", err)
 	}
@@ -532,7 +532,7 @@ func TestMessageCreateRoutesDirectMessage(t *testing.T) {
 
 	session := newTestSession(t, server.Client())
 
-	expected, err := commands.ExecuteFromKey(commands.CmdHelp, discordgo.EnglishUS)
+	expected, err := commands.ExecuteFromKey(commands.Help, discordgo.EnglishUS)
 	if err != nil {
 		t.Fatalf("execute help: %v", err)
 	}

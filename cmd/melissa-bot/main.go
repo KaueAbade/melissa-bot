@@ -229,9 +229,9 @@ func respondToMessage(session *discordgo.Session, message *discordgo.MessageCrea
 			log.Printf("Failed to resolve command: %v\n", err)
 		}
 
-		response, err = commands.ExecuteFromKey(commands.CmdHello, locale)
+		response, err = commands.ExecuteFromKey(commands.Hello, locale)
 		if err != nil {
-			log.Printf("Failed to resolve fallback command '%s': %v\n", commands.CmdHello, err)
+			log.Printf("Failed to resolve fallback command '%s': %v\n", commands.Hello, err)
 			return
 		}
 	}

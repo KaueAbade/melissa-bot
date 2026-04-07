@@ -8,7 +8,7 @@ import (
 
 func TestCommandDescriptionFallback(t *testing.T) {
 	cmd := &command{
-		Key: CmdHelp,
+		Key: Help,
 		Descriptions: map[discordgo.Locale]string{
 			discordgo.EnglishUS:    "english",
 			discordgo.PortugueseBR: "portuguese",

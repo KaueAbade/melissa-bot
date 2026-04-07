@@ -32,12 +32,12 @@ func withTemporaryRegistry(t *testing.T, cmds []*command) {
 }
 
 func TestGetCmdFromKey(t *testing.T) {
-	cmd, exists := getCmdFromKey(CmdHelp)
+	cmd, exists := getCmdFromKey(Help)
 	if !exists {
-		t.Fatalf("expected command for key %q", CmdHelp)
+		t.Fatalf("expected command for key %q", Help)
 	}
 	if cmd == nil {
-		t.Fatalf("expected non-nil command for key %q", CmdHelp)
+		t.Fatalf("expected non-nil command for key %q", Help)
 	}
 
 	if _, exists := getCmdFromKey(CommandKey("missing")); exists {
@@ -62,7 +62,7 @@ func TestGetCmdFromName(t *testing.T) {
 
 func TestGetCmdFromContent(t *testing.T) {
 	cmd, ok := getCmdFromContent("  PiNg now")
-	if !ok || cmd == nil || cmd.Key != CmdPing {
+	if !ok || cmd == nil || cmd.Key != Ping {
 		t.Fatalf("expected ping command from content")
 	}
 
@@ -273,7 +273,7 @@ func TestHandleInteractionSuccess(t *testing.T) {
 	if !called {
 		t.Fatalf("expected interaction callback request")
 	}
-	cmd := commands[CmdHello]
+	cmd := commands[Hello]
 	if cmd == nil {
 		t.Fatalf("expected command to be registered")
 	}
@@ -385,7 +385,7 @@ func TestHandleInteractionExecuteError(t *testing.T) {
 func TestExecuteFromKey(t *testing.T) {
 	withTemporaryRegistry(t, []*command{
 		{
-			Key: CmdHello,
+			Key: Hello,
 			Descriptions: map[discordgo.Locale]string{
 				discordgo.EnglishUS: "hello",
 			},
@@ -396,7 +396,7 @@ func TestExecuteFromKey(t *testing.T) {
 		},
 	})
 
-	got, err := ExecuteFromKey(CmdHello, discordgo.EnglishUS)
+	got, err := ExecuteFromKey(Hello, discordgo.EnglishUS)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -412,7 +412,7 @@ func TestExecuteFromKey(t *testing.T) {
 func TestExecuteFromContentAndName(t *testing.T) {
 	withTemporaryRegistry(t, []*command{
 		{
-			Key: CmdPing,
+			Key: Ping,
 			Descriptions: map[discordgo.Locale]string{
 				discordgo.EnglishUS: "ping",
 			},
