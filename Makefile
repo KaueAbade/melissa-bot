@@ -17,7 +17,7 @@ help: ## Show available make targets
 	@echo "  clean       Remove generated artifacts"
 
 test: ## Run tests with race detector and coverage
-	go test -race -cover ./...
+	@DISCORD_BOT_TOKEN="test-token" go test -race -cover ./...
 
 build: ## Build container image
 	@podman build -f $(DOCKERFILE) -t $(IMAGE):$(APP_VERSION) -t $(IMAGE):latest .
