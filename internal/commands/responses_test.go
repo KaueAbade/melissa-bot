@@ -43,11 +43,7 @@ func TestSimpleResponseReturnsErrorForNilCommand(t *testing.T) {
 }
 
 func TestSimpleResponseFallsBackToDesiredLocale(t *testing.T) {
-	originalDesired := desiredLocale
-	desiredLocale = discordgo.PortugueseBR
-	t.Cleanup(func() {
-		desiredLocale = originalDesired
-	})
+	withTemporaryDesiredLocale(t, discordgo.PortugueseBR)
 
 	command := &command{
 		Key: Hello,
@@ -67,11 +63,7 @@ func TestSimpleResponseFallsBackToDesiredLocale(t *testing.T) {
 }
 
 func TestSimpleResponseFallsBackToEnglishWhenDesiredMissing(t *testing.T) {
-	originalDesired := desiredLocale
-	desiredLocale = discordgo.PortugueseBR
-	t.Cleanup(func() {
-		desiredLocale = originalDesired
-	})
+	withTemporaryDesiredLocale(t, discordgo.PortugueseBR)
 
 	command := &command{
 		Key: Hello,
@@ -105,7 +97,7 @@ func TestHelpResponseIncludesCommands(t *testing.T) {
 		t.Fatalf("expected help prefix in response, got %q", got)
 	}
 
-	for _, cmdDef := range commandsDef {
+	for _, cmdDef := range GetRegistry().getCommandDefinitionsSnapshot() {
 		line := fmt.Sprintf("/%s:", cmdDef.Key)
 		if !strings.Contains(got, line) {
 			t.Fatalf("expected help response to include %q, got %q", line, got)
@@ -114,7 +106,7 @@ func TestHelpResponseIncludesCommands(t *testing.T) {
 }
 
 func TestHelpResponseUsesCommandDefinitionsDirectly(t *testing.T) {
-	withTemporaryRegistry(t, []*command{
+	registry := withTemporaryRegistry(t, []*command{
 		{
 			Key: Help,
 			Descriptions: map[discordgo.Locale]string{
@@ -137,7 +129,7 @@ func TestHelpResponseUsesCommandDefinitionsDirectly(t *testing.T) {
 		},
 	})
 
-	helpCmd, exists := getCmdFromKey(Help)
+	helpCmd, exists := registry.getCmdFromKey(Help)
 	if !exists {
 		t.Fatalf("expected help command lookup")
 	}

@@ -10,21 +10,16 @@ import (
 // This function simply returns the response for a command based on the locale, without any dynamic content
 func simpleResponse(cmd *command, locale discordgo.Locale) (string, error) {
 	if cmd == nil {
-		return "", fmt.Errorf("nil command")
+		return "", ErrNilCommand
 	}
 	if cmd.ResponseTemplate == nil {
-		return "", fmt.Errorf("nil response template")
+		return "", wrapCommandError(cmd.Key, ErrNilResponseTemplate)
 	}
-	if response, exists := cmd.ResponseTemplate[locale]; exists {
+	if response, exists := resolveLocalizedText(cmd.ResponseTemplate, locale); exists {
 		return response, nil
 	}
-	if response, exists := cmd.ResponseTemplate[desiredLocale]; exists {
-		return response, nil
-	}
-	if response, exists := cmd.ResponseTemplate[discordgo.EnglishUS]; exists {
-		return response, nil
-	}
-	return "", fmt.Errorf("missing default locale response template")
+
+	return "", wrapCommandError(cmd.Key, ErrMissingDefaultResponseTemplate)
 }
 
 // This functions returns a help message listing all available commands and their descriptions.
@@ -36,7 +31,7 @@ func helpResponse(cmd *command, locale discordgo.Locale) (string, error) {
 	}
 
 	// Append each command and its description to the response
-	for _, cmdDef := range commandsDef {
+	for _, cmdDef := range GetRegistry().getCommandDefinitionsSnapshot() {
 		cmdBrief := fmt.Sprintf("/%s: %s", cmdDef.Key, cmdDef.Description(locale))
 		response = fmt.Sprintf("%s\n%s", response, cmdBrief)
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -22,87 +23,69 @@ var (
 	defaultContexts     = []discordgo.InteractionContextType{discordgo.InteractionContextGuild, discordgo.InteractionContextBotDM}
 	defaultIntegrations = []discordgo.ApplicationIntegrationType{discordgo.ApplicationIntegrationGuildInstall}
 	defaultLocale       = discordgo.EnglishUS
-	desiredLocale       = discordgo.EnglishUS
-	commands            map[CommandKey]*command
-	commandsDef         []*command
 )
 
-// Exported command keys for external callers.
-const (
-	Help  CommandKey = "help"
-	Hello CommandKey = "hello"
-	Ping  CommandKey = "ping"
-	Roll  CommandKey = "roll"
-)
+var defaultRegistry *Registry
 
-func init() {
-	// Command registry initialization
-	commandsDef = []*command{
-		{
-			Key: Help,
-			Descriptions: map[discordgo.Locale]string{
-				discordgo.EnglishUS:    "Provides information about the bot and its commands",
-				discordgo.PortugueseBR: "Fornece informações sobre o bot e seus comandos",
-			},
-			ResponseBuilder: helpResponse,
-			ResponseTemplate: map[discordgo.Locale]string{
-				discordgo.EnglishUS:    "Here are some commands you can use:",
-				discordgo.PortugueseBR: "Aqui estão alguns comandos que você pode usar:",
-			},
-		},
-		{
-			Key: Hello,
-			Descriptions: map[discordgo.Locale]string{
-				discordgo.EnglishUS:    "Says hello to the user",
-				discordgo.PortugueseBR: "Diz olá para o usuário",
-			},
-			ResponseBuilder: simpleResponse,
-			ResponseTemplate: map[discordgo.Locale]string{
-				discordgo.EnglishUS:    "Hello! I'm Melissa Bot, your friendly Discord assistant.",
-				discordgo.PortugueseBR: "Olá! Eu sou a Melissa Bot, sua assistente amigável do Discord.",
-			},
-		},
-		{
-			Key: Ping,
-			Descriptions: map[discordgo.Locale]string{
-				discordgo.EnglishUS: "Pong!",
-			},
-			ResponseBuilder: simpleResponse,
-			ResponseTemplate: map[discordgo.Locale]string{
-				discordgo.EnglishUS: "Pong!",
-			},
-		},
-		{
-			Key: Roll,
-			Descriptions: map[discordgo.Locale]string{
-				discordgo.EnglishUS:    "Rolls a dice and returns the result",
-				discordgo.PortugueseBR: "Joga um dado e retorna o resultado",
-			},
-			ResponseBuilder: rollResponse,
-			ResponseTemplate: map[discordgo.Locale]string{
-				discordgo.EnglishUS:    "You rolled a %d!",
-				discordgo.PortugueseBR: "Você rolou um %d!",
-			},
-		},
-	}
-
-	// Build a command lookup map
-	commands = make(map[CommandKey]*command, len(commandsDef))
-	for _, cmd := range commandsDef {
-		commands[cmd.Key] = cmd
-	}
+type Registry struct {
+	mu            sync.RWMutex
+	desiredLocale discordgo.Locale
+	commands      map[CommandKey]*command
+	commandsDef   []*command
 }
 
-// SetLocale is a helper function to set the default locale
-func SetDesiredLocale(locale discordgo.Locale) {
-	// Update the default locale
-	log.Printf("Setting desired locale to: %s\n", locale)
-	desiredLocale = locale
+func newRegistry(definitions []*command, desiredLocale discordgo.Locale) *Registry {
+	registry := &Registry{
+		desiredLocale: desiredLocale,
+		commands:      make(map[CommandKey]*command, len(definitions)),
+		commandsDef:   append([]*command(nil), definitions...),
+	}
+
+	for _, cmd := range definitions {
+		if cmd != nil {
+			normalizedKey := normalizeCommandKey(cmd.Key.String())
+			if normalizedKey != "" {
+				registry.commands[normalizedKey] = cmd
+			}
+		}
+	}
+
+	return registry
+}
+
+// GetRegistry returns the package-wide registry instance used by compatibility wrappers.
+func GetRegistry() *Registry {
+	if defaultRegistry == nil {
+		defaultRegistry = newRegistry(nil, discordgo.EnglishUS)
+	}
+	return defaultRegistry
+}
+
+func init() {
+	defaultRegistry = newRegistry(getCommandDefinitions(), discordgo.EnglishUS)
+}
+
+func (registry *Registry) SetDesiredLocale(locale discordgo.Locale) {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	registry.desiredLocale = locale
+}
+
+func (registry *Registry) getDesiredLocale() discordgo.Locale {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+	return registry.desiredLocale
+}
+
+func (registry *Registry) getCommandDefinitionsSnapshot() []*command {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+	return append([]*command(nil), registry.commandsDef...)
 }
 
 // ExecuteFromKey resolves a command by key and returns its localized response.
-func ExecuteFromKey(key CommandKey, locale discordgo.Locale) (string, error) {
-	cmd, exists := getCmdFromKey(key)
+func (registry *Registry) ExecuteFromKey(key CommandKey, locale discordgo.Locale) (string, error) {
+	cmd, exists := registry.getCmdFromKey(key)
 	if !exists {
 		return "", ErrCommandNotFound
 	}
@@ -111,8 +94,8 @@ func ExecuteFromKey(key CommandKey, locale discordgo.Locale) (string, error) {
 }
 
 // ExecuteFromName resolves a command by name and returns its localized response.
-func ExecuteFromName(name string, locale discordgo.Locale) (string, error) {
-	cmd, exists := getCmdFromName(name)
+func (registry *Registry) ExecuteFromName(name string, locale discordgo.Locale) (string, error) {
+	cmd, exists := registry.getCmdFromName(name)
 	if !exists {
 		return "", ErrCommandNotFound
 	}
@@ -121,8 +104,8 @@ func ExecuteFromName(name string, locale discordgo.Locale) (string, error) {
 }
 
 // ExecuteFromContent resolves a command from content and returns its localized response.
-func ExecuteFromContent(content string, locale discordgo.Locale) (string, error) {
-	cmd, exists := getCmdFromContent(content)
+func (registry *Registry) ExecuteFromContent(content string, locale discordgo.Locale) (string, error) {
+	cmd, exists := registry.getCmdFromContent(content)
 	if !exists {
 		return "", ErrCommandNotFound
 	}
@@ -130,20 +113,20 @@ func ExecuteFromContent(content string, locale discordgo.Locale) (string, error)
 	return cmd.Response(locale)
 }
 
-// ApplicationCommands returns a slice of discordgo.ApplicationCommand structs for all registered commands,
-// which can be used for registration with Discord.
-func GetApplicationCommands() []*discordgo.ApplicationCommand {
-	applicationCommands := make([]*discordgo.ApplicationCommand, 0, len(commandsDef))
-	for _, cmd := range commandsDef {
-		applicationCommands = append(applicationCommands, cmd.ApplicationCommand())
+// GetApplicationCommands returns all registered commands in Discord API format.
+func (registry *Registry) GetApplicationCommands() []*discordgo.ApplicationCommand {
+	definitions := registry.getCommandDefinitionsSnapshot()
+	applicationCommands := make([]*discordgo.ApplicationCommand, 0, len(definitions))
+	for _, cmd := range definitions {
+		applicationCommands = append(applicationCommands, cmd.applicationCommand(registry.getDesiredLocale()))
 	}
 	return applicationCommands
 }
 
 // HandleInteraction dispatches a slash command and responds to Discord.
-func HandleInteraction(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
+func (registry *Registry) HandleInteraction(session *discordgo.Session, interaction *discordgo.InteractionCreate) {
 	cmdName := interaction.ApplicationCommandData().Name
-	response, err := ExecuteFromName(cmdName, interaction.Locale)
+	response, err := registry.ExecuteFromName(cmdName, interaction.Locale)
 	if err != nil {
 		if errors.Is(err, ErrCommandNotFound) {
 			log.Printf("Failed to resolve /%s response\n", cmdName)
@@ -159,18 +142,49 @@ func HandleInteraction(session *discordgo.Session, interaction *discordgo.Intera
 		log.Printf("Failed to respond to /%s: %v\n", cmdName, err)
 	}
 }
+func (registry *Registry) getCmdFromContent(content string) (*command, bool) {
+	fields := strings.Fields(content)
+	if len(fields) == 0 {
+		return nil, false
+	}
+
+	return registry.getCmdFromName(fields[0])
+}
+
+func (registry *Registry) getCmdFromName(name string) (*command, bool) {
+	key := normalizeCommandKey(name)
+	if key == "" {
+		return nil, false
+	}
+
+	return registry.getCmdFromKey(key)
+}
+
+func (registry *Registry) getCmdFromKey(key CommandKey) (*command, bool) {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+	if cmd, exists := registry.commands[key]; exists {
+		return cmd, true
+	}
+	return nil, false
+}
+
+func normalizeCommandKey(key string) CommandKey {
+	return CommandKey(strings.ToLower(strings.TrimSpace(key)))
+}
 
 // ValidateCommands checks that all command definitions are structurally valid.
-func ValidateCommands() error {
+func (registry *Registry) ValidateCommands() error {
+	definitions := registry.getCommandDefinitionsSnapshot()
 	seen := map[CommandKey]struct{}{}
-	for _, cmd := range commandsDef {
+	for _, cmd := range definitions {
 		if cmd == nil {
 			return fmt.Errorf("nil command found in registry")
 		}
 		if cmd.Key == "" {
 			return fmt.Errorf("command with empty key found")
 		}
-		normalizedKey := CommandKey(strings.ToLower(strings.TrimSpace(cmd.Key.String())))
+		normalizedKey := normalizeCommandKey(cmd.Key.String())
 		if normalizedKey == "" {
 			return fmt.Errorf("command with invalid normalized key: %q", cmd.Key)
 		}
@@ -197,32 +211,4 @@ func ValidateCommands() error {
 	}
 
 	return nil
-}
-
-// getCmdKeyFromContent parses and validates the first token as a typed command key.
-func getCmdFromContent(content string) (*command, bool) {
-	fields := strings.Fields(content)
-	if len(fields) == 0 {
-		return nil, false
-	}
-
-	return getCmdFromName(fields[0])
-}
-
-// getCmdKeyFromName parses and validates the input string as a typed command key.
-func getCmdFromName(name string) (*command, bool) {
-	key := CommandKey(strings.ToLower(strings.TrimSpace(name)))
-	if key == "" {
-		return nil, false
-	}
-
-	return getCmdFromKey(key)
-}
-
-// getCmdFromKey looks up a Command struct by its CommandKey.
-func getCmdFromKey(key CommandKey) (*command, bool) {
-	if cmd, exists := commands[key]; exists {
-		return cmd, true
-	}
-	return nil, false
 }

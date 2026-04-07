@@ -11,43 +11,43 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func withTemporaryRegistry(t *testing.T, cmds []*command) {
+func withTemporaryRegistry(t *testing.T, cmds []*command) *Registry {
 	t.Helper()
-	originalCommands := commandsDef
-	originalMap := commands
-
-	commandsDef = cmds
-	commands = make(map[CommandKey]*command, len(cmds))
-	for _, cmd := range cmds {
-		if cmd != nil {
-			normalizedKey := CommandKey(strings.ToLower(strings.TrimSpace(cmd.Key.String())))
-			commands[normalizedKey] = cmd
-		}
+	originalRegistry := defaultRegistry
+	desiredLocale := discordgo.EnglishUS
+	if originalRegistry != nil {
+		desiredLocale = originalRegistry.getDesiredLocale()
 	}
+	testRegistry := newRegistry(cmds, desiredLocale)
+	defaultRegistry = testRegistry
 
 	t.Cleanup(func() {
-		commandsDef = originalCommands
-		commands = originalMap
+		defaultRegistry = originalRegistry
 	})
+
+	return testRegistry
 }
 
 func withTemporaryDesiredLocale(t *testing.T, locale discordgo.Locale) {
 	t.Helper()
-	originalLocale := desiredLocale
-	desiredLocale = locale
+	registry := GetRegistry()
+	originalLocale := registry.getDesiredLocale()
+	registry.SetDesiredLocale(locale)
 
 	t.Cleanup(func() {
-		desiredLocale = originalLocale
+		registry.SetDesiredLocale(originalLocale)
 	})
 }
 
 func TestSetDesiredLocale(t *testing.T) {
-	withTemporaryDesiredLocale(t, discordgo.EnglishUS)
+	registry := GetRegistry()
+	originalLocale := registry.getDesiredLocale()
+	t.Cleanup(func() { registry.SetDesiredLocale(originalLocale) })
 
-	SetDesiredLocale(discordgo.PortugueseBR)
+	registry.SetDesiredLocale(discordgo.PortugueseBR)
 
-	if desiredLocale != discordgo.PortugueseBR {
-		t.Fatalf("expected desired locale to be %s, got %s", discordgo.PortugueseBR, desiredLocale)
+	if got := registry.getDesiredLocale(); got != discordgo.PortugueseBR {
+		t.Fatalf("expected desired locale to be %s, got %s", discordgo.PortugueseBR, got)
 	}
 }
 
@@ -63,7 +63,7 @@ func TestSetDesiredLocaleAffectsResponseFallback(t *testing.T) {
 		},
 	}
 
-	SetDesiredLocale(discordgo.PortugueseBR)
+	GetRegistry().SetDesiredLocale(discordgo.PortugueseBR)
 
 	got, err := simpleResponse(cmd, discordgo.Japanese)
 	if err != nil {
@@ -74,8 +74,29 @@ func TestSetDesiredLocaleAffectsResponseFallback(t *testing.T) {
 	}
 }
 
+func TestGetRegistryCreatesNewWhenNil(t *testing.T) {
+	originalRegistry := defaultRegistry
+	t.Cleanup(func() {
+		defaultRegistry = originalRegistry
+	})
+
+	defaultRegistry = nil
+	registry := GetRegistry()
+
+	if registry == nil {
+		t.Fatalf("expected GetRegistry() to create a new registry when defaultRegistry is nil")
+	}
+	if len(registry.commands) != 0 {
+		t.Fatalf("expected newly created registry to have no commands, got %d", len(registry.commands))
+	}
+	if registry.getDesiredLocale() != discordgo.EnglishUS {
+		t.Fatalf("expected new registry to have default locale, got %s", registry.getDesiredLocale())
+	}
+}
+
 func TestGetCmdFromKey(t *testing.T) {
-	cmd, exists := getCmdFromKey(Help)
+	registry := GetRegistry()
+	cmd, exists := registry.getCmdFromKey(Help)
 	if !exists {
 		t.Fatalf("expected command for key %q", Help)
 	}
@@ -83,45 +104,49 @@ func TestGetCmdFromKey(t *testing.T) {
 		t.Fatalf("expected non-nil command for key %q", Help)
 	}
 
-	if _, exists := getCmdFromKey(CommandKey("missing")); exists {
+	if _, exists := registry.getCmdFromKey(CommandKey("missing")); exists {
 		t.Fatalf("did not expect missing command key to resolve")
 	}
 }
 
 func TestGetCmdFromName(t *testing.T) {
-	cmd, ok := getCmdFromName("  HeLp  ")
+	registry := GetRegistry()
+	cmd, ok := registry.getCmdFromName("  HeLp  ")
 	if !ok || cmd == nil {
 		t.Fatalf("expected help command to resolve from name")
 	}
 
-	if _, ok := getCmdFromName("   "); ok {
+	if _, ok := registry.getCmdFromName("   "); ok {
 		t.Fatalf("did not expect empty command name to resolve")
 	}
 
-	if _, ok := getCmdFromName("missing"); ok {
+	if _, ok := registry.getCmdFromName("missing"); ok {
 		t.Fatalf("did not expect missing command name to resolve")
 	}
 }
 
 func TestGetCmdFromContent(t *testing.T) {
-	cmd, ok := getCmdFromContent("  PiNg now")
+	registry := GetRegistry()
+	cmd, ok := registry.getCmdFromContent("  PiNg now")
 	if !ok || cmd == nil || cmd.Key != Ping {
 		t.Fatalf("expected ping command from content")
 	}
 
-	if _, ok := getCmdFromContent("   "); ok {
+	if _, ok := registry.getCmdFromContent("   "); ok {
 		t.Fatalf("did not expect empty content to resolve command")
 	}
 
-	if _, ok := getCmdFromContent("unknown args"); ok {
+	if _, ok := registry.getCmdFromContent("unknown args"); ok {
 		t.Fatalf("did not expect unknown content to resolve command")
 	}
 }
 
 func TestGetApplicationCommands(t *testing.T) {
-	appCmds := GetApplicationCommands()
-	if len(appCmds) != len(commandsDef) {
-		t.Fatalf("expected %d application commands, got %d", len(commandsDef), len(appCmds))
+	registry := GetRegistry()
+	appCmds := registry.GetApplicationCommands()
+	defs := registry.getCommandDefinitionsSnapshot()
+	if len(appCmds) != len(defs) {
+		t.Fatalf("expected %d application commands, got %d", len(defs), len(appCmds))
 	}
 	for _, appCmd := range appCmds {
 		if appCmd.Name == "" {
@@ -134,7 +159,7 @@ func TestGetApplicationCommands(t *testing.T) {
 }
 
 func TestValidateCommandsSuccess(t *testing.T) {
-	withTemporaryRegistry(t, []*command{
+	registry := withTemporaryRegistry(t, []*command{
 		{
 			Key: CommandKey("ok"),
 			Descriptions: map[discordgo.Locale]string{
@@ -147,7 +172,7 @@ func TestValidateCommandsSuccess(t *testing.T) {
 		},
 	})
 
-	if err := ValidateCommands(); err != nil {
+	if err := registry.ValidateCommands(); err != nil {
 		t.Fatalf("expected valid commands: %v", err)
 	}
 }
@@ -217,8 +242,8 @@ func TestValidateCommandsFailures(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			withTemporaryRegistry(t, tt.cmds)
-			if err := ValidateCommands(); err == nil {
+			registry := withTemporaryRegistry(t, tt.cmds)
+			if err := registry.ValidateCommands(); err == nil {
 				t.Fatalf("expected validation error")
 			}
 		})
@@ -259,7 +284,7 @@ func TestHandleInteractionUnknownCommand(t *testing.T) {
 		},
 	}}
 
-	HandleInteraction(session, interaction)
+	GetRegistry().HandleInteraction(session, interaction)
 	if called {
 		t.Fatalf("did not expect interaction callback for unknown command")
 	}
@@ -312,12 +337,12 @@ func TestHandleInteractionSuccess(t *testing.T) {
 		},
 	}}
 
-	HandleInteraction(session, interaction)
+	GetRegistry().HandleInteraction(session, interaction)
 	if !called {
 		t.Fatalf("expected interaction callback request")
 	}
-	cmd := commands[Hello]
-	if cmd == nil {
+	cmd, exists := GetRegistry().getCmdFromKey(Hello)
+	if !exists || cmd == nil {
 		t.Fatalf("expected command to be registered")
 	}
 	expected, err := cmd.Response(discordgo.EnglishUS)
@@ -367,14 +392,14 @@ func TestHandleInteractionRespondError(t *testing.T) {
 		},
 	}}
 
-	HandleInteraction(session, interaction)
+	GetRegistry().HandleInteraction(session, interaction)
 	if !called {
 		t.Fatalf("expected interaction callback request")
 	}
 }
 
 func TestHandleInteractionExecuteError(t *testing.T) {
-	withTemporaryRegistry(t, []*command{
+	registry := withTemporaryRegistry(t, []*command{
 		{
 			Key: CommandKey("broken"),
 			Descriptions: map[discordgo.Locale]string{
@@ -419,14 +444,14 @@ func TestHandleInteractionExecuteError(t *testing.T) {
 		},
 	}}
 
-	HandleInteraction(session, interaction)
+	registry.HandleInteraction(session, interaction)
 	if called {
 		t.Fatalf("did not expect interaction callback request when execute fails")
 	}
 }
 
 func TestExecuteFromKey(t *testing.T) {
-	withTemporaryRegistry(t, []*command{
+	registry := withTemporaryRegistry(t, []*command{
 		{
 			Key: Hello,
 			Descriptions: map[discordgo.Locale]string{
@@ -439,7 +464,7 @@ func TestExecuteFromKey(t *testing.T) {
 		},
 	})
 
-	got, err := ExecuteFromKey(Hello, discordgo.EnglishUS)
+	got, err := registry.ExecuteFromKey(Hello, discordgo.EnglishUS)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -447,13 +472,13 @@ func TestExecuteFromKey(t *testing.T) {
 		t.Fatalf("unexpected response: %q", got)
 	}
 
-	if _, err := ExecuteFromKey(CommandKey("missing"), discordgo.EnglishUS); !errors.Is(err, ErrCommandNotFound) {
+	if _, err := registry.ExecuteFromKey(CommandKey("missing"), discordgo.EnglishUS); !errors.Is(err, ErrCommandNotFound) {
 		t.Fatalf("expected ErrCommandNotFound, got %v", err)
 	}
 }
 
 func TestExecuteFromContentAndName(t *testing.T) {
-	withTemporaryRegistry(t, []*command{
+	registry := withTemporaryRegistry(t, []*command{
 		{
 			Key: Ping,
 			Descriptions: map[discordgo.Locale]string{
@@ -466,7 +491,7 @@ func TestExecuteFromContentAndName(t *testing.T) {
 		},
 	})
 
-	got, err := ExecuteFromName("  PING ", discordgo.EnglishUS)
+	got, err := registry.ExecuteFromName("  PING ", discordgo.EnglishUS)
 	if err != nil {
 		t.Fatalf("unexpected error from name: %v", err)
 	}
@@ -474,7 +499,7 @@ func TestExecuteFromContentAndName(t *testing.T) {
 		t.Fatalf("unexpected response from name: %q", got)
 	}
 
-	got, err = ExecuteFromContent("  ping now", discordgo.EnglishUS)
+	got, err = registry.ExecuteFromContent("  ping now", discordgo.EnglishUS)
 	if err != nil {
 		t.Fatalf("unexpected error from content: %v", err)
 	}
@@ -482,7 +507,7 @@ func TestExecuteFromContentAndName(t *testing.T) {
 		t.Fatalf("unexpected response from content: %q", got)
 	}
 
-	if _, err := ExecuteFromContent("   ", discordgo.EnglishUS); !errors.Is(err, ErrCommandNotFound) {
+	if _, err := registry.ExecuteFromContent("   ", discordgo.EnglishUS); !errors.Is(err, ErrCommandNotFound) {
 		t.Fatalf("expected ErrCommandNotFound for empty content, got %v", err)
 	}
 }

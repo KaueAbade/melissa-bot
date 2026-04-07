@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -44,6 +46,22 @@ func newTestSession(t *testing.T, client *http.Client) *discordgo.Session {
 	}
 	session.Client = client
 	session.State.User = &discordgo.User{ID: "bot-id"}
+
+	return session
+}
+
+func newTestRuntime() *appRuntime {
+	return newAppRuntime(false, false, commands.GetRegistry())
+}
+
+func newBareSession(t *testing.T, userID string) *discordgo.Session {
+	t.Helper()
+
+	session, err := discordgo.New("Bot test-token")
+	if err != nil {
+		t.Fatalf("new discord session: %v", err)
+	}
+	session.State.User = &discordgo.User{ID: userID}
 
 	return session
 }
@@ -106,13 +124,14 @@ func TestMessageCreateIgnoresBotMessages(t *testing.T) {
 	setupDiscordEndpoints(t, server.URL)
 
 	session := newTestSession(t, server.Client())
+	app := newTestRuntime()
 
-	messageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+	app.messageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
 		Author:  &discordgo.User{ID: "bot-id", Bot: true},
 		Content: "hello",
 	}})
 
-	messageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+	app.messageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
 		Author:  &discordgo.User{ID: "other-bot", Bot: true},
 		Content: "hello",
 	}})
@@ -260,8 +279,9 @@ func TestGuildMessageCreateNoop(t *testing.T) {
 	setupDiscordEndpoints(t, server.URL)
 
 	session := newTestSession(t, server.Client())
+	app := newTestRuntime()
 
-	messageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+	app.messageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
 		GuildID: "guild-1",
 		Author:  &discordgo.User{ID: "author"},
 		Content: "ping",
@@ -282,13 +302,14 @@ func TestMentionMessageCreateExecutesCommand(t *testing.T) {
 	setupDiscordEndpoints(t, server.URL)
 
 	session := newTestSession(t, server.Client())
+	app := newTestRuntime()
 
-	expected, err := commands.ExecuteFromKey(commands.Help, discordgo.EnglishUS)
+	expected, err := commands.GetRegistry().ExecuteFromKey(commands.Help, discordgo.EnglishUS)
 	if err != nil {
 		t.Fatalf("execute help: %v", err)
 	}
 
-	mentionMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+	app.mentionMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
 		ChannelID: "channel-1",
 		Author:    &discordgo.User{ID: "user-1"},
 		Content:   "<@bot-id> help",
@@ -312,13 +333,14 @@ func TestMentionMessageCreateSupportsAltMentionAndFallback(t *testing.T) {
 	setupDiscordEndpoints(t, server.URL)
 
 	session := newTestSession(t, server.Client())
+	app := newTestRuntime()
 
-	expected, err := commands.ExecuteFromKey(commands.Hello, discordgo.PortugueseBR)
+	expected, err := commands.GetRegistry().ExecuteFromKey(commands.Hello, discordgo.PortugueseBR)
 	if err != nil {
 		t.Fatalf("execute fallback hello: %v", err)
 	}
 
-	mentionMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+	app.mentionMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
 		ChannelID: "channel-1",
 		Author:    &discordgo.User{ID: "user-1"},
 		Content:   "<@!bot-id> unknown",
@@ -342,13 +364,14 @@ func TestDirectMessageCreateExecutesCommand(t *testing.T) {
 	setupDiscordEndpoints(t, server.URL)
 
 	session := newTestSession(t, server.Client())
+	app := newTestRuntime()
 
-	expected, err := commands.ExecuteFromKey(commands.Ping, discordgo.PortugueseBR)
+	expected, err := commands.GetRegistry().ExecuteFromKey(commands.Ping, discordgo.PortugueseBR)
 	if err != nil {
 		t.Fatalf("execute ping: %v", err)
 	}
 
-	directMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+	app.directMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
 		ChannelID: "channel-1",
 		Author:    &discordgo.User{ID: "dm-user"},
 		Content:   "PING",
@@ -372,13 +395,14 @@ func TestDirectMessageCreateFallback(t *testing.T) {
 	setupDiscordEndpoints(t, server.URL)
 
 	session := newTestSession(t, server.Client())
+	app := newTestRuntime()
 
-	expected, err := commands.ExecuteFromKey(commands.Hello, discordgo.PortugueseBR)
+	expected, err := commands.GetRegistry().ExecuteFromKey(commands.Hello, discordgo.PortugueseBR)
 	if err != nil {
 		t.Fatalf("execute fallback hello: %v", err)
 	}
 
-	directMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+	app.directMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
 		ChannelID: "channel-1",
 		Author:    &discordgo.User{ID: "dm-user"},
 		Content:   "unknown",
@@ -402,8 +426,9 @@ func TestMentionMessageCreateSendErrorDoesNotPanic(t *testing.T) {
 	setupDiscordEndpoints(t, server.URL)
 
 	session := newTestSession(t, server.Client())
+	app := newTestRuntime()
 
-	mentionMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+	app.mentionMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
 		ChannelID: "channel-1",
 		Author:    &discordgo.User{ID: "user-1"},
 		Content:   "<@bot-id> help",
@@ -424,8 +449,9 @@ func TestDirectMessageCreateSendErrorDoesNotPanic(t *testing.T) {
 	setupDiscordEndpoints(t, server.URL)
 
 	session := newTestSession(t, server.Client())
+	app := newTestRuntime()
 
-	directMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+	app.directMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
 		ChannelID: "channel-1",
 		Author:    &discordgo.User{ID: "dm-user"},
 		Content:   "help",
@@ -446,17 +472,18 @@ func TestEntrypointsParityForDeterministicCommands(t *testing.T) {
 	setupDiscordEndpoints(t, server.URL)
 
 	session := newTestSession(t, server.Client())
+	app := newTestRuntime()
 
 	deterministicCommands := []commands.CommandKey{commands.Help, commands.Hello, commands.Ping}
 	for _, key := range deterministicCommands {
 		*sent = (*sent)[:0]
 
-		expected, err := commands.ExecuteFromKey(key, discordgo.EnglishUS)
+		expected, err := commands.GetRegistry().ExecuteFromKey(key, discordgo.EnglishUS)
 		if err != nil {
 			t.Fatalf("execute expected response for %s: %v", key, err)
 		}
 
-		mentionMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+		app.mentionMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
 			ChannelID: "channel-1",
 			Author:    &discordgo.User{ID: "user-1"},
 			Content:   "<@bot-id> " + key.String(),
@@ -467,7 +494,7 @@ func TestEntrypointsParityForDeterministicCommands(t *testing.T) {
 		mentionResponse := (*sent)[0]
 
 		*sent = (*sent)[:0]
-		directMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+		app.directMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
 			ChannelID: "channel-1",
 			Author:    &discordgo.User{ID: "dm-user"},
 			Content:   key.String(),
@@ -499,13 +526,14 @@ func TestMessageCreateRoutesMentionBeforeGuild(t *testing.T) {
 	setupDiscordEndpoints(t, server.URL)
 
 	session := newTestSession(t, server.Client())
+	app := newTestRuntime()
 
-	expected, err := commands.ExecuteFromKey(commands.Ping, discordgo.EnglishUS)
+	expected, err := commands.GetRegistry().ExecuteFromKey(commands.Ping, discordgo.EnglishUS)
 	if err != nil {
 		t.Fatalf("execute ping: %v", err)
 	}
 
-	messageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+	app.messageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
 		GuildID:   "guild-1",
 		ChannelID: "channel-1",
 		Author:    &discordgo.User{ID: "user-1"},
@@ -531,13 +559,14 @@ func TestMessageCreateRoutesDirectMessage(t *testing.T) {
 	setupDiscordEndpoints(t, server.URL)
 
 	session := newTestSession(t, server.Client())
+	app := newTestRuntime()
 
-	expected, err := commands.ExecuteFromKey(commands.Help, discordgo.EnglishUS)
+	expected, err := commands.GetRegistry().ExecuteFromKey(commands.Help, discordgo.EnglishUS)
 	if err != nil {
 		t.Fatalf("execute help: %v", err)
 	}
 
-	messageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+	app.messageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
 		ChannelID: "channel-1",
 		Author:    &discordgo.User{ID: "dm-user"},
 		Content:   "help",
@@ -548,5 +577,323 @@ func TestMessageCreateRoutesDirectMessage(t *testing.T) {
 	}
 	if got := (*sent)[0]; got != expected {
 		t.Fatalf("expected dm route response %q, got %q", expected, got)
+	}
+}
+
+func TestRunReturnsErrorForNilRuntime(t *testing.T) {
+	err := run(nil, func(c chan<- os.Signal, sig ...os.Signal) {})
+	if err == nil {
+		t.Fatalf("expected runtime error")
+	}
+}
+
+func TestRunOpensAndShutsDown(t *testing.T) {
+	app := newTestRuntime()
+	app.discord = newBareSession(t, "bot-id")
+
+	opened := false
+	closed := false
+	app.openSession = func(session *discordgo.Session) error {
+		opened = true
+		return nil
+	}
+	app.closeSession = func(session *discordgo.Session) error {
+		closed = true
+		return nil
+	}
+
+	err := run(app, func(c chan<- os.Signal, sig ...os.Signal) {
+		c <- os.Interrupt
+	})
+	if err != nil {
+		t.Fatalf("unexpected run error: %v", err)
+	}
+	if !opened {
+		t.Fatalf("expected openSession to be called")
+	}
+	if !closed {
+		t.Fatalf("expected closeSession to be called")
+	}
+}
+
+func TestRunReturnsOpenError(t *testing.T) {
+	app := newTestRuntime()
+	app.discord = newBareSession(t, "bot-id")
+
+	openErr := errors.New("open failed")
+	app.openSession = func(session *discordgo.Session) error {
+		return openErr
+	}
+
+	err := run(app, func(c chan<- os.Signal, sig ...os.Signal) {})
+	if !errors.Is(err, openErr) {
+		t.Fatalf("expected open error, got %v", err)
+	}
+}
+
+func TestShutdownWipesCommandsWhenEnabled(t *testing.T) {
+	app := newAppRuntime(true, false, commands.GetRegistry())
+	app.discord = newBareSession(t, "bot-id")
+	app.registeredCommands = []*discordgo.ApplicationCommand{
+		{ID: "c1", Name: "one"},
+		{ID: "c2", Name: "two"},
+	}
+
+	deleted := 0
+	app.deleteCommand = func(session *discordgo.Session, cmd *discordgo.ApplicationCommand) error {
+		deleted++
+		return nil
+	}
+	app.closeSession = func(session *discordgo.Session) error { return nil }
+
+	app.shutdown()
+
+	if deleted != 2 {
+		t.Fatalf("expected two deletions, got %d", deleted)
+	}
+}
+
+func TestShutdownNoopForNilRuntime(t *testing.T) {
+	var app *appRuntime
+	app.shutdown()
+}
+
+func TestShutdownSkipsWipeWhenDisabled(t *testing.T) {
+	app := newAppRuntime(false, false, commands.GetRegistry())
+	app.discord = newBareSession(t, "bot-id")
+
+	deleted := 0
+	closed := false
+	app.deleteCommand = func(session *discordgo.Session, cmd *discordgo.ApplicationCommand) error {
+		deleted++
+		return nil
+	}
+	app.closeSession = func(session *discordgo.Session) error {
+		closed = true
+		return nil
+	}
+
+	app.shutdown()
+
+	if deleted != 0 {
+		t.Fatalf("expected no deletions, got %d", deleted)
+	}
+	if !closed {
+		t.Fatalf("expected closeSession to be called")
+	}
+}
+
+func TestReadyPanicsWhenCommandRegistrationFails(t *testing.T) {
+	app := newTestRuntime()
+	session := newBareSession(t, "bot-id")
+	app.getCommands = func() []*discordgo.ApplicationCommand {
+		return []*discordgo.ApplicationCommand{{Name: "help", Description: "help"}}
+	}
+	app.registerCommand = func(session *discordgo.Session, cmd *discordgo.ApplicationCommand) (*discordgo.ApplicationCommand, error) {
+		return nil, errors.New("register failed")
+	}
+
+	defer func() {
+		if recovered := recover(); recovered == nil {
+			t.Fatalf("expected panic when command registration fails")
+		}
+	}()
+
+	app.ready(session, &discordgo.Ready{})
+}
+
+func TestReadyRegistersAllCommands(t *testing.T) {
+	app := newTestRuntime()
+	session := newBareSession(t, "bot-id")
+	session.State.User.Username = "melissa"
+	session.State.User.Discriminator = "0001"
+
+	updated := false
+	registered := 0
+	app.updateGameStatus = func(session *discordgo.Session) {
+		updated = true
+	}
+	app.registerCommand = func(session *discordgo.Session, cmd *discordgo.ApplicationCommand) (*discordgo.ApplicationCommand, error) {
+		registered++
+		return &discordgo.ApplicationCommand{ID: fmt.Sprintf("id-%d", registered), Name: cmd.Name}, nil
+	}
+
+	app.ready(session, &discordgo.Ready{})
+
+	if !updated {
+		t.Fatalf("expected game status update")
+	}
+	if registered != len(commands.GetRegistry().GetApplicationCommands()) {
+		t.Fatalf("expected all commands to be registered, got %d", registered)
+	}
+	if got := len(app.registeredCommands); got != registered {
+		t.Fatalf("expected %d registered commands in runtime, got %d", registered, got)
+	}
+}
+
+func TestRespondToMessageUsesFallbackWhenCommandNotFound(t *testing.T) {
+	server, sent := newDiscordAPIServer(t, map[string]string{}, map[string]testGuild{}, http.StatusOK)
+	defer server.Close()
+	setupDiscordEndpoints(t, server.URL)
+
+	app := newTestRuntime()
+	session := newTestSession(t, server.Client())
+
+	app.execFromContent = func(content string, locale discordgo.Locale) (string, error) {
+		return "", commands.ErrCommandNotFound
+	}
+	app.execFromKey = func(key commands.CommandKey, locale discordgo.Locale) (string, error) {
+		return "fallback", nil
+	}
+
+	app.respondToMessage(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+		ChannelID: "channel-1",
+		Author:    &discordgo.User{ID: "user-1"},
+		Content:   "unknown",
+	}})
+
+	if got := len(*sent); got != 1 {
+		t.Fatalf("expected one sent message, got %d", got)
+	}
+	if got := (*sent)[0]; got != "fallback" {
+		t.Fatalf("expected fallback response, got %q", got)
+	}
+}
+
+func TestRespondToMessageReturnsWhenFallbackFails(t *testing.T) {
+	server, sent := newDiscordAPIServer(t, map[string]string{}, map[string]testGuild{}, http.StatusOK)
+	defer server.Close()
+	setupDiscordEndpoints(t, server.URL)
+
+	app := newTestRuntime()
+	session := newTestSession(t, server.Client())
+
+	app.execFromContent = func(content string, locale discordgo.Locale) (string, error) {
+		return "", commands.ErrCommandNotFound
+	}
+	app.execFromKey = func(key commands.CommandKey, locale discordgo.Locale) (string, error) {
+		return "", errors.New("fallback failed")
+	}
+
+	app.respondToMessage(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+		ChannelID: "channel-1",
+		Author:    &discordgo.User{ID: "user-1"},
+		Content:   "unknown",
+	}})
+
+	if got := len(*sent); got != 0 {
+		t.Fatalf("expected no message sent when fallback fails, got %d", got)
+	}
+}
+
+func TestRespondToMessageLogsNonCommandNotFoundAndFallsBack(t *testing.T) {
+	server, sent := newDiscordAPIServer(t, map[string]string{}, map[string]testGuild{}, http.StatusOK)
+	defer server.Close()
+	setupDiscordEndpoints(t, server.URL)
+
+	app := newTestRuntime()
+	session := newTestSession(t, server.Client())
+
+	app.execFromContent = func(content string, locale discordgo.Locale) (string, error) {
+		return "", errors.New("unexpected")
+	}
+	app.execFromKey = func(key commands.CommandKey, locale discordgo.Locale) (string, error) {
+		return "hello", nil
+	}
+
+	app.respondToMessage(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+		ChannelID: "channel-1",
+		Author:    &discordgo.User{ID: "user-1"},
+		Content:   "unknown",
+	}})
+
+	if got := len(*sent); got != 1 {
+		t.Fatalf("expected one sent message, got %d", got)
+	}
+	if got := (*sent)[0]; got != "hello" {
+		t.Fatalf("expected fallback hello response, got %q", got)
+	}
+}
+
+func TestDebugBranchesInMessageHandlers(t *testing.T) {
+	server, sent := newDiscordAPIServer(t,
+		map[string]string{"user-1": string(discordgo.EnglishUS), "dm-user": string(discordgo.EnglishUS)},
+		map[string]testGuild{},
+		http.StatusOK,
+	)
+	defer server.Close()
+	setupDiscordEndpoints(t, server.URL)
+
+	app := newAppRuntime(false, true, commands.GetRegistry())
+	session := newTestSession(t, server.Client())
+
+	app.guildMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+		GuildID: "guild-1",
+		Author:  &discordgo.User{ID: "user-1"},
+		Content: "hello",
+	}})
+
+	app.mentionMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+		ChannelID: "channel-1",
+		Author:    &discordgo.User{ID: "user-1"},
+		Content:   "<@bot-id> help",
+	}})
+
+	app.directMessageCreate(session, &discordgo.MessageCreate{Message: &discordgo.Message{
+		ChannelID: "channel-1",
+		Author:    &discordgo.User{ID: "dm-user"},
+		Content:   "help",
+	}})
+
+	if got := len(*sent); got != 2 {
+		t.Fatalf("expected two sent messages from mention and dm handlers, got %d", got)
+	}
+}
+
+func TestNewAppRuntimeDefaultCommandOps(t *testing.T) {
+	app := newAppRuntime(false, false, commands.GetRegistry())
+	session := newTestSession(t, http.DefaultClient)
+
+	if err := app.closeSession(session); err != nil {
+		t.Fatalf("expected closeSession nil error, got %v", err)
+	}
+
+	originalGlobalCommands := discordgo.EndpointApplicationGlobalCommands
+	originalGlobalCommand := discordgo.EndpointApplicationGlobalCommand
+	t.Cleanup(func() {
+		discordgo.EndpointApplicationGlobalCommands = originalGlobalCommands
+		discordgo.EndpointApplicationGlobalCommand = originalGlobalCommand
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/applications/bot-id/commands":
+			_, _ = w.Write([]byte(`{"id":"cmd-1","name":"help","description":"help"}`))
+		case r.Method == http.MethodDelete && r.URL.Path == "/applications/bot-id/commands/cmd-1":
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	discordgo.EndpointApplicationGlobalCommands = func(appID string) string {
+		return server.URL + "/applications/" + appID + "/commands"
+	}
+	discordgo.EndpointApplicationGlobalCommand = func(appID, cmdID string) string {
+		return server.URL + "/applications/" + appID + "/commands/" + cmdID
+	}
+	session.Client = server.Client()
+
+	created, err := app.registerCommand(session, &discordgo.ApplicationCommand{Name: "help", Description: "help"})
+	if err != nil {
+		t.Fatalf("register command failed: %v", err)
+	}
+	if created == nil || created.ID != "cmd-1" {
+		t.Fatalf("unexpected created command: %#v", created)
+	}
+
+	if err := app.deleteCommand(session, &discordgo.ApplicationCommand{ID: "cmd-1", Name: "help"}); err != nil {
+		t.Fatalf("delete command failed: %v", err)
 	}
 }
