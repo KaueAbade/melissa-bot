@@ -1,8 +1,4 @@
 # Stage 1: Build the application in golang-alpine
-
-
-
-
 FROM golang:1.26-alpine AS builder
 
 # Set the working directory inside the container
