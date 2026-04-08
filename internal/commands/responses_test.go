@@ -37,7 +37,7 @@ func TestSimpleResponseReturnsErrorForNilTemplate(t *testing.T) {
 }
 
 func TestSimpleResponseReturnsErrorForNilCommand(t *testing.T) {
-	if _, err := simpleResponse(nil, discordgo.EnglishUS); err == nil {
+	if _, err := simpleResponse((*command)(nil), discordgo.EnglishUS); err == nil {
 		t.Fatalf("expected error when command is nil")
 	}
 }
@@ -181,7 +181,7 @@ func TestHelpResponseReturnsErrorForInvalidTemplate(t *testing.T) {
 }
 
 func TestRollResponseReturnsErrorForNilCommand(t *testing.T) {
-	if _, err := rollResponse(nil, discordgo.EnglishUS); err == nil {
+	if _, err := rollResponse((*command)(nil), discordgo.EnglishUS); err == nil {
 		t.Fatalf("expected roll response error for nil command")
 	}
 }

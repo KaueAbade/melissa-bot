@@ -3,6 +3,8 @@ package commands
 import "github.com/bwmarrin/discordgo"
 
 // Exported command keys for external callers.
+type CommandKey string
+
 const (
 	Help  CommandKey = "help"
 	Hello CommandKey = "hello"
@@ -10,6 +12,20 @@ const (
 	Roll  CommandKey = "roll"
 )
 
+// CommandKey.String returns the string representation of the CommandKey.
+func (key CommandKey) String() string {
+	return string(key)
+}
+
+// Default command properties, can be overridden by individual commands if needed
+var (
+	defaultDMPermission = true
+	defaultContexts     = []discordgo.InteractionContextType{discordgo.InteractionContextGuild, discordgo.InteractionContextBotDM}
+	defaultIntegrations = []discordgo.ApplicationIntegrationType{discordgo.ApplicationIntegrationGuildInstall}
+	defaultLocale       = discordgo.EnglishUS
+)
+
+// getCommandDefinitions returns the list of all command definitions, which can be used to initialize the registry.
 func getCommandDefinitions() []*command {
 	return []*command{
 		{

@@ -13,16 +13,16 @@ import (
 
 func withTemporaryRegistry(t *testing.T, cmds []*command) *Registry {
 	t.Helper()
-	originalRegistry := defaultRegistry
+	originalRegistry := commandRegistryInstance
 	desiredLocale := discordgo.EnglishUS
 	if originalRegistry != nil {
-		desiredLocale = originalRegistry.getDesiredLocale()
+		desiredLocale = originalRegistry.GetDesiredLocale()
 	}
 	testRegistry := newRegistry(cmds, desiredLocale)
-	defaultRegistry = testRegistry
+	commandRegistryInstance = testRegistry
 
 	t.Cleanup(func() {
-		defaultRegistry = originalRegistry
+		commandRegistryInstance = originalRegistry
 	})
 
 	return testRegistry
@@ -31,7 +31,7 @@ func withTemporaryRegistry(t *testing.T, cmds []*command) *Registry {
 func withTemporaryDesiredLocale(t *testing.T, locale discordgo.Locale) {
 	t.Helper()
 	registry := GetRegistry()
-	originalLocale := registry.getDesiredLocale()
+	originalLocale := registry.GetDesiredLocale()
 	registry.SetDesiredLocale(locale)
 
 	t.Cleanup(func() {
@@ -41,12 +41,12 @@ func withTemporaryDesiredLocale(t *testing.T, locale discordgo.Locale) {
 
 func TestSetDesiredLocale(t *testing.T) {
 	registry := GetRegistry()
-	originalLocale := registry.getDesiredLocale()
+	originalLocale := registry.GetDesiredLocale()
 	t.Cleanup(func() { registry.SetDesiredLocale(originalLocale) })
 
 	registry.SetDesiredLocale(discordgo.PortugueseBR)
 
-	if got := registry.getDesiredLocale(); got != discordgo.PortugueseBR {
+	if got := registry.GetDesiredLocale(); got != discordgo.PortugueseBR {
 		t.Fatalf("expected desired locale to be %s, got %s", discordgo.PortugueseBR, got)
 	}
 }
@@ -75,22 +75,22 @@ func TestSetDesiredLocaleAffectsResponseFallback(t *testing.T) {
 }
 
 func TestGetRegistryCreatesNewWhenNil(t *testing.T) {
-	originalRegistry := defaultRegistry
+	originalRegistry := commandRegistryInstance
 	t.Cleanup(func() {
-		defaultRegistry = originalRegistry
+		commandRegistryInstance = originalRegistry
 	})
 
-	defaultRegistry = nil
+	commandRegistryInstance = nil
 	registry := GetRegistry()
 
 	if registry == nil {
-		t.Fatalf("expected GetRegistry() to create a new registry when defaultRegistry is nil")
+		t.Fatalf("expected GetRegistry() to create a new registry when commandRegistryInstance is nil")
 	}
 	if len(registry.commands) != 0 {
 		t.Fatalf("expected newly created registry to have no commands, got %d", len(registry.commands))
 	}
-	if registry.getDesiredLocale() != discordgo.EnglishUS {
-		t.Fatalf("expected new registry to have default locale, got %s", registry.getDesiredLocale())
+	if registry.GetDesiredLocale() != discordgo.EnglishUS {
+		t.Fatalf("expected new registry to have default locale, got %s", registry.GetDesiredLocale())
 	}
 }
 

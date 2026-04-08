@@ -7,7 +7,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// This function simply returns the response for a command based on the locale, without any dynamic content
+// simpleResponse is a helper function that generates a response string for a command based on its ResponseTemplate and the provided locale.
+// It returns an error if the command or its response template is nil, or if the default response template is missing.
 func simpleResponse(cmd *command, locale discordgo.Locale) (string, error) {
 	if cmd == nil {
 		return "", ErrNilCommand
@@ -15,14 +16,15 @@ func simpleResponse(cmd *command, locale discordgo.Locale) (string, error) {
 	if cmd.ResponseTemplate == nil {
 		return "", wrapCommandError(cmd.Key, ErrNilResponseTemplate)
 	}
-	if response, exists := resolveLocalizedText(cmd.ResponseTemplate, locale); exists {
+	if response, exists := textResolver().ResolveLocalizedText(cmd.ResponseTemplate, locale); exists {
 		return response, nil
 	}
 
 	return "", wrapCommandError(cmd.Key, ErrMissingDefaultResponseTemplate)
 }
 
-// This functions returns a help message listing all available commands and their descriptions.
+// helpResponse generates a response for the help command,
+// which lists all available commands and their descriptions based on the provided locale.
 func helpResponse(cmd *command, locale discordgo.Locale) (string, error) {
 	// Get the base response for the help command based on the locale
 	response, err := simpleResponse(cmd, locale)
@@ -39,7 +41,8 @@ func helpResponse(cmd *command, locale discordgo.Locale) (string, error) {
 	return response, nil
 }
 
-// Rolls a dice and returns the result
+// rollResponse generates a response for a roll command,
+// which simulates rolling a six-sided die and returns the result in the response string.
 func rollResponse(cmd *command, locale discordgo.Locale) (string, error) {
 	response, err := simpleResponse(cmd, locale)
 	if err != nil {
